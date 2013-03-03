@@ -113,16 +113,24 @@ class RequestError(Exception):
         self.hide_traceback = hide_traceback
 
 
+class HiddenTracebackRequestError(RequestError):
+    """A base exception for HTTP errors that want to hide the traceback."""
+
+    def __init__(self, message, hide_traceback=True):
+        super(HiddenTracebackRequestError, self).__init__(message)
+        self.hide_traceback = hide_traceback
+
+
 class Forbidden(RequestError):
     status = 403
 
 
-class NotFound(RequestError):
+class NotFound(HiddenTracebackRequestError):
     status = 404
 
-    def __init__(self, message, hide_traceback=True):
-        super(NotFound, self).__init__(message)
-        self.hide_traceback = hide_traceback
+
+class MethodNotAllowed(HiddenTracebackRequestError):
+    status = 405
 
 
 class AppError(RequestError):
@@ -637,9 +645,12 @@ def handle_error(exception, request=None):
 
 
 def find_matching_url(request):
-    """Searches through the methods who've registed themselves with the HTTP decorators."""
+    """
+    Searches through the methods who've registed themselves with the 
+    HTTP decorators.
+    """
     if not request.method in REQUEST_MAPPINGS:
-        raise NotFound("The HTTP request method '%s' is not supported." % request.method)
+        raise MethodNotAllowed("The HTTP request method '%s' is not supported." % request.method)
 
     for url_set in REQUEST_MAPPINGS[request.method]:
         match = url_set[0].search(request.path)
@@ -786,6 +797,12 @@ def forbidden(request, exception):
 @error(404)
 def not_found(request, exception):
     response = Response('Not Found', status=404, content_type='text/plain')
+    return response.send(request._start_response)
+
+
+@error(405)
+def method_not_allowed(request, exception):
+    response = Response('Method Not Allowed', status=405, content_type='text/plain')
     return response.send(request._start_response)
 
 
